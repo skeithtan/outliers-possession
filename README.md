@@ -1,5 +1,11 @@
 # Barça possession, More than a Hack 2027
 
+**See the engine at work on the demo site:
+[skeithtan.github.io/outliers-possession](https://skeithtan.github.io/outliers-possession/).**
+The site is one scrolling page. It shows the possession ribbon of the match and walks through the
+engine step by step. Then it gives the evidence: the tests on other matches, the label-free checks
+on this match and the public window. [Demo](#demo) says more.
+
 This repository is our team's entry for Phase 1 of
 [More than a Hack 2027](https://github.com/metrica-sports/more-than-a-hack-2027). The engine
 labels every frame of FC Barcelona against Athletic Club with one of four labels:
@@ -41,7 +47,7 @@ The public repository is
 [github.com/skeithtan/outliers-possession](https://github.com/skeithtan/outliers-possession). We
 develop in a private repository and copy the submitted state to the public
 one. The copy holds the code, the two weights files, the organisers' scorer and starter code, the
-tests and the pinned requirements. It leaves out the commit history, our documents,
+demo site, the tests and the pinned requirements. It leaves out the commit history, our documents,
 our records and our working notes. `python -m tools.export_public` makes the copy and checks it.
 
 Some comments in the code name our records and our working rules. Those files stay in the private
@@ -127,6 +133,49 @@ To write the rule engine's labels instead, do these steps:
 The organisers publish labels for the first 5 minutes only. That window has 17 possessions. Use it
 to check that the pipeline is correct. Do not use it to choose between versions. The reason is in
 the organisers' [EVALUATION.md](https://github.com/metrica-sports/more-than-a-hack-2027/blob/main/EVALUATION.md).
+
+## Demo
+
+The demo site explains the engine in one scrolling page. Its hosted address is
+`https://skeithtan.github.io/outliers-possession/`. The address is live only when the repository is
+public and Pages is set to "GitHub Actions".
+
+The page shows the possession ribbon of the match and explains the metric. It walks through the
+engine step by step, then the evidence: the tests on other matches, the label-free checks
+on this match and the public window, transition by transition. It also shows the rule engine's
+rules on synthetic scenes and the reproduction md5.
+
+The site has two modes. The public mode uses only `site/data/public/` and plays synthetic scenes.
+The local mode adds a replay of the real tracking from `site/data/local/`, which git ignores.
+
+To run the site on your machine, follow these steps. The repository already holds a public bundle.
+To see the site, do step 3 only. The build of step 1 needs the reports that the scorer and
+`tools/forensics.py` write. The build also reads our working notes. It runs only in the private
+repository.
+
+1. Rebuild the public bundle after the engine or the ledger changes:
+
+   ```bash
+   python -m tools.viz.build_site --version <name> --results evaluation/results/<name>.csv
+   ```
+
+2. Build the local replay. This step needs the match data:
+
+   ```bash
+   python -m tools.viz.build_replay --version <name> --results evaluation/results/<name>.csv
+   ```
+
+3. Serve the site and open `http://localhost:8000/`:
+
+   ```bash
+   cd site && python -m http.server 8000
+   ```
+
+Shortcuts: `space` plays and pauses the replay. `[` and `]` change the speed. The arrow keys step
+one frame. `A` switches the arena mode and `F` switches fullscreen.
+
+The public site never holds tracking positions or our full-match labels. See
+[`site/README.md`](site/README.md) for details.
 
 ## Run the engine on another match
 
@@ -233,6 +282,6 @@ starter/              organisers' loaders, baseline and notebooks
 engine/               our submission pipeline
 tools/                our forensics, sanity checks and analysis scripts
 tests/                our unit and reproducibility tests
-site/                 a web page about the engine (static files)
+site/                 our demo site
 data/                 match data, never committed
 ```
