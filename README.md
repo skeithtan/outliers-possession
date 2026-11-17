@@ -1,10 +1,21 @@
 # Barça possession, More than a Hack 2027
 
-**See the engine at work on the demo site:
-[skeithtan.github.io/outliers-possession](https://skeithtan.github.io/outliers-possession/).**
-The site is one scrolling page. It shows the possession ribbon of the match and walks through the
-engine step by step. Then it gives the evidence: the tests on other matches, the label-free checks
-on this match and the public window. [Demo](#demo) says more.
+<p align="center">
+  <a href="https://skeithtan.github.io/outliers-possession/">
+    <img src="site/readme-banner.png" width="100%"
+         alt="Who has the ball? The demo site: the possession ribbon of FC Barcelona v Athletic Club, as the engine labels it">
+  </a>
+</p>
+
+<h3 align="center">
+  <a href="https://skeithtan.github.io/outliers-possession/">Open the demo site: skeithtan.github.io/outliers-possession</a>
+</h3>
+
+<p align="center">
+  One scrolling page. It shows the possession ribbon of the match and walks through the engine step by step.<br>
+  Then it gives the evidence: the tests on other matches, the label-free checks on this match and the public window.<br>
+  <a href="#demo">Demo</a> says more.
+</p>
 
 This repository is our team's entry for Phase 1 of
 [More than a Hack 2027](https://github.com/metrica-sports/more-than-a-hack-2027). The engine
