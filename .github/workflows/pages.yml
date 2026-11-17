@@ -1,0 +1,60 @@
+# Deploys the demo site in site/ to GitHub Pages.
+# Pages on a private repository needs a paid plan. While the repository is private, the job
+# `check` runs and the jobs `build` and `deploy` are skipped. After the repository is public, set
+# "Settings > Pages > Source" to "GitHub Actions" and run this workflow once from the Actions tab.
+# Each later push to main deploys again. The trigger has no path filter, because a new export
+# replaces the one commit of the public repository and a path filter can skip that push.
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+      - name: Refuse a local bundle
+        run: test ! -e site/data/local
+      - name: Guard the public bundle
+        run: python -m tools.viz.guard site/data/public
+      - name: Check the size of the public bundle
+        run: |
+          size=$(du -sb site/data/public | cut -f1)
+          echo "public bundle: ${size} bytes"
+          test "${size}" -le 2000000
+
+  build:
+    needs: check
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

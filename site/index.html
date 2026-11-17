@@ -1,0 +1,858 @@
+<!doctype html>
+<html lang="en" data-arena="0">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Who has the ball? A possession engine for FC Barcelona v Athletic Club</title>
+  <meta name="description" content="More than a Hack 2027, Phase 1. An engine that labels every frame of one football match H, A or D with two learned models and a decoder, and the evidence behind it.">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0b0e14">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0e14'/%3E%3Crect x='5' y='9' width='9' height='14' rx='2' fill='%234f8dff'/%3E%3Crect x='15' y='9' width='4' height='14' rx='1' fill='%238b93a7'/%3E%3Crect x='20' y='9' width='7' height='14' rx='2' fill='%23ff4d6d'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./css/tokens.css">
+  <link rel="stylesheet" href="./css/base.css">
+  <link rel="stylesheet" href="./css/sections.css">
+  <link rel="stylesheet" href="./css/engine.css">
+  <link rel="stylesheet" href="./css/learned.css">
+  <!-- D3 7.9.0, pinned with SRI. If the CDN fails, load the vendored copy of the same file. -->
+  <script>
+    window.__d3Fallback = function () {
+      var s = document.createElement('script');
+      s.src = './vendor/d3.min.js';
+      s.onload = function () { window.dispatchEvent(new Event('d3-ready')); };
+      s.onerror = function () { window.dispatchEvent(new Event('d3-failed')); };
+      document.head.appendChild(s);
+    };
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"
+          integrity="sha384-CjloA8y00+1SDAUkjs099PVfnY2KmDC2BZnws9kh8D/lX1s46w6EPhpXdqMfjK6i"
+          crossorigin="anonymous" onerror="window.__d3Fallback()"></script>
+  <script type="module" src="./js/main.js"></script>
+</head>
+<body>
+  <a class="skip" href="#glance">Skip to the summary</a>
+  <svg class="svg-defs" width="0" height="0" aria-hidden="true" focusable="false">
+    <defs>
+      <pattern id="hatch-x" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <rect width="6" height="6" fill="#0b0e14"></rect>
+        <line x1="0" y1="0" x2="0" y2="6" stroke="#2f3849" stroke-width="2"></line>
+      </pattern>
+      <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="3" result="b"></feGaussianBlur>
+        <feMerge><feMergeNode in="b"></feMergeNode><feMergeNode in="SourceGraphic"></feMergeNode></feMerge>
+      </filter>
+    </defs>
+  </svg>
+
+  <header class="topbar" id="topbar">
+    <a class="brand" href="#hero" aria-label="Back to the top">
+      <span class="brand-mark" aria-hidden="true"><i class="m-h"></i><i class="m-d"></i><i class="m-a"></i></span>
+      <span class="brand-text">Possession engine <span class="brand-game" data-bind="game">BAR-ATH</span></span>
+    </a>
+    <nav class="topnav" aria-label="Sections">
+      <a href="#glance" data-nav="glance">Summary</a>
+      <a href="#learned" data-nav="problem">Approach</a>
+      <a href="#tracking" data-nav="tracking">Tracking</a>
+      <a href="#results" data-nav="results">Results</a>
+      <a href="#config" data-nav="config">Rules</a>
+      <a href="#limits" data-nav="limits">Limits</a>
+      <a href="#tried" data-nav="tried">Not used</a>
+      <a href="#repro" data-nav="repro">Reproduce</a>
+    </nav>
+    <div class="topbar-right">
+      <span class="mode-badge" id="mode-badge" data-mode="public" title="Which replay the walk-through of the rule engine shows">
+        <span class="mode-dot" aria-hidden="true"></span><span class="mode-text">replay: synthetic illustration</span>
+      </span>
+      <button class="btn btn--ghost arena-toggle" id="arena-toggle" type="button" aria-pressed="false"
+              title="Arena mode: larger type, steps advance every 9 s. Keys: A toggles, F fullscreen, Esc exits">
+        Arena <kbd>A</kbd>
+      </button>
+    </div>
+    <div class="scroll-progress" aria-hidden="true"><span id="scroll-progress-bar"></span></div>
+  </header>
+
+  <div class="banner" id="banner" hidden></div>
+
+  <main id="story">
+    <!-- 0. Hero: the whole match on one ribbon ------------------------------------------- -->
+    <section id="hero" class="story-section story-section--hero" data-section="hero">
+      <div class="scrolly scrolly--caption">
+        <div class="figure figure--hero">
+          <div class="hero-head">
+            <p class="kicker">More than a Hack 2027 <span class="sep">/</span> Phase 1</p>
+            <h1 class="hero-title">Who has the ball?</h1>
+            <p class="hero-sub">
+              <span class="team team--h" data-bind="teamH">FC Barcelona</span>
+              <span class="vs">v</span>
+              <span class="team team--a" data-bind="teamA">Athletic Club</span>.
+              <span class="tnum" data-bind="nFrames">199,319</span> video frames. One label for each frame.
+            </p>
+          </div>
+          <div class="hero-ribbon" id="hero-ribbon"></div>
+          <div class="hero-foot">
+            <div class="hero-caption" id="hero-caption" aria-live="polite"></div>
+            <div class="counters" id="hero-counters"></div>
+          </div>
+        </div>
+        <div class="steps">
+          <div class="step" data-step="0">
+            <div class="step-copy">
+              <p><strong>The whole match on one line.</strong> Every frame gets one letter.
+                <span class="chip chip--h">H</span> when <span data-bind="teamH">FC Barcelona</span> has the ball,
+                <span class="chip chip--a">A</span> when <span data-bind="teamA">Athletic Club</span> has it,
+                <span class="chip chip--d">D</span> when the ball is dead.
+                <span class="chip chip--x">X</span> marks frames that are never graded.</p>
+            </div>
+          </div>
+          <div class="step" data-step="1">
+            <div class="step-copy">
+              <p><strong>The organisers' baseline</strong> names the nearest player and takes a majority vote over
+                a window of 2 s on each side. It changes owner whenever a player passes near the ball:
+                <span class="tnum" data-bind="basePoss">594</span> possessions over the match.</p>
+            </div>
+          </div>
+          <div class="step" data-step="2">
+            <div class="step-copy">
+              <p class="only-public"><strong>The engine</strong> gives every frame a probability of each label from two
+                learned models, trained on labelled external matches. A decoder that penalises every change
+                turns them into whole possessions: <span class="tnum" data-bind="oursPoss">264</span> possessions.
+                The stripe shows our label share for each minute. Our full-match labels stay off the public page.</p>
+              <p class="only-local"><strong>The engine</strong> gives every frame a probability of each label from two
+                learned models, trained on labelled external matches. A decoder that penalises every change
+                turns them into whole possessions: <span class="tnum" data-bind="oursPoss">264</span> possessions.
+                Local mode shows our labels at frame resolution.</p>
+            </div>
+          </div>
+          <div class="step" data-step="3">
+            <div class="step-copy">
+              <p><strong>Only five minutes have public answers.</strong> Frames
+                <span class="tnum" data-bind="winStart">11,185</span> to <span class="tnum" data-bind="winLast">18,684</span>
+                carry the organisers' ground truth, in gold. We use them only to check the pipeline.</p>
+            </div>
+          </div>
+          <div class="step" data-step="4">
+            <div class="step-copy">
+              <p><strong>Explore.</strong> Drag the overview strip to move. Pinch, or hold Ctrl and scroll, to zoom.
+                Click a lane to send the replay to that frame.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Summary, key numbers and the compliance statement ---------------------------------- -->
+    <section id="glance" class="story-section" data-section="glance">
+      <header class="section-head">
+        <p class="kicker">At a glance</p>
+        <h2>Possession from the tracking alone</h2>
+        <p class="lede">The engine reads the automatic tracking of the match and says, for every frame, which
+          team has the ball or that the ball is dead. Two models, trained on labelled external matches from three
+          providers, give the probability of each label: a small recurrent neural network and a per-frame model of
+          gradient-boosted trees. A Viterbi decoder that penalises every change decodes their weighted average.
+          Neither the labels nor the video of this match shaped the models or any setting. Both models run in
+          <code>numpy</code>. Every gain below is measured against our rule engine, an earlier engine of physical
+          rules that one configuration setting restores.</p>
+      </header>
+      <div class="block step step--block" data-step="0">
+        <div class="gl-tiles" id="glance-fig"></div>
+        <aside class="compliance" aria-labelledby="compliance-title">
+          <h3 id="compliance-title">Compliance statement</h3>
+          <ul>
+            <li>No frame of this match is labelled by hand, and no other data about it is made by people.</li>
+            <li>No label and no video of this match trained, tuned or selected anything. The public window served
+              only pipeline checks: the validator, the frame alignment and byte-for-byte reproduction. We scored the
+              engine there once, after its settings were final (Section 03).</li>
+            <li>The two models trained only on Metrica sample games, Sportec Open DFL (DFL) and SkillCorner, and
+              every setting of the models, the blend and the decoder was chosen on external matches. No PFF match
+              trained either model of the engine: 43 helped us compare designs, and 15 were held out (Section 03).</li>
+            <li>On this match we checked the output without labels, against limits taken from external matches and
+              written down before the run. Two other networks failed these checks and are not used (Section 03).</li>
+            <li>The parts kept from the rule engine, the ball cleaning, the goalkeeper-swap correction and the dead
+              ball before each kickoff, use no setting fitted to labels. The match data is never committed to the
+              repository.</li>
+          </ul>
+          <p class="compliance-note">We keep a record of the source and the history of every setting.</p>
+        </aside>
+      </div>
+    </section>
+
+    <!-- 1. The approach: what the score rewards -------------------------------------------- -->
+    <section id="problem" class="story-section" data-section="problem">
+      <header class="section-head">
+        <p class="kicker"><span class="num">01</span> The approach, and why</p>
+        <h2>Count possessions, not frames</h2>
+        <p class="lede"><code>spellF1</code> matches whole possessions, not frames. One short false possession
+          costs as much as a long missed one, and every stoppage ends a possession. Possession is an event, not a
+          distance, as in the definitions of Metrica, Second Spectrum, PFF and Link and Hoernig (2017).</p>
+      </header>
+      <div class="scrolly">
+        <div class="steps">
+          <div class="step" data-step="0">
+            <div class="step-copy">
+              <h3>The public window cannot choose</h3>
+              <p>On the public window, <code>smooth125</code> beats <code>smooth50</code>. On the full match
+                the order reverses. Seventeen possessions are too few to choose between two settings.</p>
+              <p>So the public window only checks the pipeline. No setting of the engine comes from it.</p>
+            </div>
+          </div>
+          <div class="step" data-step="1">
+            <div class="step-copy">
+              <h3>A spell is a run of H or of A</h3>
+              <p>The ground truth is on top and our labels are below. A band joins two spells of the same team that
+                overlap. Its strength is their temporal IoU: the overlap divided by the union.</p>
+            </div>
+          </div>
+          <div class="step step--tall" data-step="2">
+            <div class="step-copy">
+              <h3>One to one, at five thresholds</h3>
+              <p>The scorer matches spells greedily, by descending IoU, and each spell matches once.
+                It does this at IoU 0.3, 0.4, 0.5, 0.6 and 0.7, then averages the five F1 scores.</p>
+              <p>Scroll, or drag the handle, to move the threshold.</p>
+            </div>
+          </div>
+          <div class="step" data-step="3">
+            <div class="step-copy">
+              <h3>Short spells are fragile</h3>
+              <p>The shortest public spell lasts <span class="tnum" data-bind="shortLen">19</span> frames.
+                Shift a copy by a few frames and its IoU with the original falls fast.
+                Drag the copy, or scroll.</p>
+              <p class="muted" data-bind="mergeNote"></p>
+            </div>
+          </div>
+          <div class="step" data-step="4">
+            <div class="step-copy">
+              <h3>Timing is part of the score</h3>
+              <p>The nearest player changes before the true owner does. The baseline follows it. The public window
+                holds 20 transitions: 12 hand-overs, 4 stoppage starts and 4 restarts. The engine has a
+                transition within 25 frames (1 s) of 11 of them, and the hand-overs it matches land a
+                median of 3.5 frames early. The chart counts the same for the baseline.</p>
+            </div>
+          </div>
+        </div>
+        <div class="figure"><div class="fig" id="problem-fig"></div></div>
+      </div>
+    </section>
+
+    <!-- 1. The approach: the engine step by step, built by sections/learned.js ---- -->
+    <section id="learned" class="story-section" data-section="learned" data-nav-group="problem"></section>
+
+    <!-- 1. The approach: each choice and what we rejected ---------------------------------- -->
+    <section id="choices" class="story-section" data-section="choices" data-nav-group="problem">
+      <header class="section-head">
+        <p class="kicker"><span class="num">01</span> The approach, and why</p>
+        <h2>Each choice, why, and what we rejected</h2>
+        <p class="lede">Each row is a choice of the engine, with the alternative that the external matches
+          turned down. The choices of the rule engine, the fallback, are in
+          <a href="#rules">Section 04</a>.</p>
+      </header>
+      <div class="block step step--block" data-step="0">
+        <div class="fig fig--wide">
+          <table class="rt rt--choices">
+            <thead><tr><th>decision</th><th>why</th><th>alternative we rejected</th></tr></thead>
+            <tbody>
+              <tr><td>Two learned models, with the rule engine as the fallback</td>
+                <td>The rule engine loses most on home-or-away decisions, and a model can learn them from labelled
+                  external matches. With each provider unseen, the two models gain over the rule engine: +0.154 on
+                  Metrica and +0.166 on DFL. On SkillCorner's possession field they are level with it (+0.004).</td>
+                <td>The rule engine alone. One configuration setting restores it. Two other networks failed
+                  label-free checks on this match. The two models meet them.</td></tr>
+              <tr><td>A recurrent network at 5 frames a second for context, and a per-frame model at 25 frames a
+                  second for short events</td>
+                <td>The network reads the frames before and after each moment. The per-frame model reads each frame
+                  with windows of up to 4.5 s. Averaged in, the per-frame model raised <code>spellF1</code> on 43 of
+                  the 43 PFF design matches.</td>
+                <td>The network alone. It missed stoppages while the ball was missing: on the PFF design matches it
+                  labelled only 82.5% of such dead frames <code>D</code>.</td></tr>
+              <tr><td>Decode whole possessions, with a cost of 12 for each change</td>
+                <td><code>spellF1</code> charges a false possession like a missed long one. The cost makes a short
+                  false possession need strong evidence.</td>
+                <td>The most likely label of each frame, or majority-vote smoothing, the organisers' baselines: they
+                  split possessions or erase short ones. A richer decoder, with minimum durations, separate costs
+                  into and out of dead ball or a dead-ball bias: no gain.</td></tr>
+              <tr><td>Train only on external matches, and test on PFF FC's World Cup matches</td>
+                <td>No label of this match may train the models, and the public window is too short to choose
+                  anything. No PFF match trains either model of the engine.</td>
+                <td>Choosing on the public window. <code>baseline_smooth125</code> beats
+                  <code>baseline_smooth50</code> there (0.424 against 0.326) and loses on the full match (0.224
+                  against 0.243).</td></tr>
+              <tr><td>Tracking defects added in training</td>
+                <td>This match's tracker loses the ball for minutes and drops and swaps tracks. Half of the training
+                  windows come from one of 16 copies of each match with defects added: a hidden ball, dropped players,
+                  tracks given to the wrong team, duplicated and fragmented tracks. The ranges are generic: none is
+                  measured on this match. On live frames where we hide the ball, the engine calls <code>D</code> on
+                  20% to 21% of them on the three providers, the rule engine on 45% to 56%.</td>
+                <td>Wider defect ranges, and track repair with new features of each team's shape: no gain.</td></tr>
+              <tr><td>A still ball jittered in training</td>
+                <td>DFL's tracking holds the ball exactly still while play is dead, which no other tracker does. A
+                  ball that does not move for 13 frames or more is removed, and half of those runs stay visible
+                  with a small jitter measured on SkillCorner's ball during stoppages. Without the jitter, a network
+                  that had never seen SkillCorner labelled only 30% of such a stoppage as dead (rule engine: 67%).
+                  With it, 60%.</td>
+                <td>All still balls kept visible: no better.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. Missing and noisy tracking ------------------------------------------------------ -->
+    <section id="tracking" class="story-section" data-section="tracking">
+      <header class="section-head">
+        <p class="kicker"><span class="num">02</span> Missing and noisy tracking</p>
+        <h2>The ball is visible on 59.3% of graded frames</h2>
+        <p class="lede">The tracker loses the ball for minutes, smooths it at every contact and sometimes swaps the
+          goalkeepers' tracks. The engine cleans what it can before it computes any feature. The models learn the
+          rest from external matches with the same kinds of faults added.</p>
+      </header>
+      <div class="block step step--block" data-step="0">
+        <div class="tk-grid">
+          <article class="tk-card">
+            <h3>Ball gaps of minutes</h3>
+            <p>The 133 gaps longer than 2 s cover 40.6% of graded frames, with a median of 11 s, so interpolation
+              recovers nothing. The models see whether the ball is visible, how long ago it was last seen and how
+              long until it is next seen.</p>
+            <p>The network alone missed stoppages while the ball was missing: on the PFF design matches it labelled
+              only 82.5% of such dead frames <code>D</code>. Averaged in, the per-frame model raised
+              <code>spellF1</code> on 43 of the 43 PFF design matches. We write <code>X</code> only on frames that are
+              never graded.</p>
+          </article>
+          <article class="tk-card">
+            <h3>Defects added in training</h3>
+            <p>Half of the training windows come from one of 16 copies of each match with tracking defects added: a
+              hidden ball, dropped players, tracks given to the wrong team, duplicated tracks and fragmented tracks.
+              The ranges of the defects are generic. None is measured on this match.</p>
+            <p>On live frames where we hide the ball, the engine calls <code>D</code> on 20% to 21% of them on the
+              three providers, against 45% to 56% for the rule engine.</p>
+          </article>
+          <article class="tk-card">
+            <h3>A ball that the tracker holds still</h3>
+            <p>DFL's tracking holds the ball exactly still while play is dead, which no other tracker does. A ball
+              that does not move for 13 frames or more is removed. In training, half of those runs stay visible
+              instead, with a small jitter measured on SkillCorner's ball during stoppages, so that the network also
+              sees stoppages with the ball visible.</p>
+            <p>Without that jitter, a network that had never seen SkillCorner labelled only 30% of such a stoppage
+              as dead (rule engine: 67%). With it, 60%.</p>
+          </article>
+          <article class="tk-card">
+            <h3>A smoothed ball and swapped goalkeepers</h3>
+            <p>The tracker smooths the ball over about 0.9 s. A contact shows as a bump of acceleration about 24
+              frames wide, and the smoothing moves the ball off the foot at every change of velocity, by about 2.3 m
+              for a 15 m/s pass from rest.</p>
+            <p>Before any feature, the engine counts the 181 frames where the ball jumps more than 3 m in one frame
+              as missing. The tracker sometimes carries one goalkeeper's track onto the other goalkeeper, and the
+              engine moves the position back, on 7,999 graded frames: the goalkeeper-swap correction. This ball
+              cleaning, the goalkeeper-swap correction and the players' speed from their positions are the parts of
+              the rule engine's code that the engine keeps.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Results on other matches -------------------------------------------------------- -->
+    <section id="results" class="story-section" data-section="results">
+      <header class="section-head">
+        <p class="kicker"><span class="num">03</span> Results</p>
+        <h2>Results on matches the models never saw</h2>
+        <p class="lede">The rule engine loses most on home-or-away decisions, and a model can learn them from
+          labelled matches. No label of this match may train it, and the public window is too short to choose
+          anything. So we test every choice on <em>external matches</em>, which come with their providers' labels:
+          the eight Metrica and DFL training matches (three Metrica sample games, five DFL matches), 20 SkillCorner
+          matches and 58 PFF FC World Cup 2022 matches. A gain is the engine's <code>spellF1</code> minus the rule
+          engine's, averaged over a test's matches.</p>
+        <p class="lede">SkillCorner labels its matches two ways: by its <em>phases of play</em>, and by its
+          <em>possession field</em>, which names a team on each frame of its tracking. With an <em>unseen provider</em>, no model that labels a match saw any match of its provider. No PFF
+          match trained a model. The 43 <em>PFF design matches</em> helped us compare designs, so they are not an
+          untouched test. The 15 <em>held-out PFF matches</em> were kept out of every design choice and run once. On
+          PFF we score <em>the 2-second labels</em>, in which a team's run under 2 s inside live play does not change
+          the possession, and the labels as provided.</p>
+      </header>
+      <div class="block step step--block" data-step="0">
+        <div class="fig fig--wide" id="results-fig"></div>
+      </div>
+    </section>
+
+    <!-- 3. Results on this match: label-free sanity checks --------------------------------- -->
+    <section id="sanity" class="story-section" data-section="sanity" data-nav-group="results">
+      <header class="section-head">
+        <p class="kicker"><span class="num">03</span> Results <span class="sep">/</span> on this match</p>
+        <h2>On this match, checks that need no labels</h2>
+        <p class="lede">The output has 264 possessions (rule engine: 279), <code>D</code> on 46.6% of graded frames
+          (48.6%) in 103 stoppages (97), and a median possession of 7.5 s (8.3 s). We checked it against limits that
+          come from external matches and were written down before the run. Such a check had
+          stopped two other networks: one whose seeds disagreed too much, one whose possessions ran longer than in
+          any external labels.</p>
+        <p class="lede">The two models met every limit. The four networks give a different most likely class on
+          5.18% of graded frames (limit 5.48%), and the four mirrored copies on 2.01% (limit 2.11%). Possession
+          lengths stay inside the bounds of the external labels, and the 265 possessions that the models wrote are
+          0.950 times the rule engine's 279, inside the range of 0.9464 to 1.387 on the external matches. A check of
+          the output against Law 8 then showed that the models gave the first 0.84 s of the second half to the team
+          that had kicked off the first half. The kickoff team rule removes that possession, so the output has 264,
+          0.9462 times the rule engine's and 0.0002 below that range. Effective
+          playing time in LaLiga, about 53 of 106 minutes, makes a <code>D</code> share of 35% to 50% plausible. The
+          chart's allowed ranges are wider, because they catch only a broken output.</p>
+      </header>
+      <div class="block step step--block" data-step="0">
+        <div class="fig fig--wide" id="sanity-fig"></div>
+      </div>
+    </section>
+
+    <!-- 4. The possession rules: the engine's line ------------------------------ -->
+    <section id="config" class="story-section" data-section="config">
+      <header class="section-head">
+        <p class="kicker"><span class="num">04</span> The possession rules</p>
+        <h2>Where the engine draws the line</h2>
+        <p class="lede">The organisers leave "controlled possession" open. The two models draw the line where the
+          labels they learned from draw it. The home-or-away decision was learned from Metrica and DFL only: Metrica's labels come
+          from its events, and DFL's give the ball to a team for a single touch. SkillCorner's labels taught only
+          dead ball against live play.</p>
+      </header>
+      <div class="block step step--block" data-step="0">
+        <div class="fig fig--wide">
+          <table class="rt rt--rules">
+            <thead><tr><th>situation</th><th>the engine</th><th>where the line comes from</th></tr></thead>
+            <tbody>
+              <tr><td>A team kicks, receives, controls or dribbles the ball</td>
+                <td>The label changes team when the models' evidence for the new team, added over the frames,
+                  outweighs the cost of 12.</td>
+                <td>The labels of Metrica (from its events) and DFL (per-frame possession).</td></tr>
+              <tr><td>A single touch or a deflection</td>
+                <td>The models learned DFL's convention, which gives the ball to a team for a single touch, and the
+                  cost of 12 lets one touch change the team only when the evidence for it is strong.</td>
+                <td>Metrica, DFL and the decoder. SkillCorner's labels taught only dead ball against live play.</td></tr>
+              <tr><td>A challenge or a loose ball</td>
+                <td>No change until the evidence for the other team outweighs the cost: the last team holds.</td>
+                <td>The decoder.</td></tr>
+              <tr><td>Ball out or a whistle</td>
+                <td><code>D</code> when the dead-ball evidence outweighs the cost of 12 for entering dead ball.</td>
+                <td>The dead-ball labels of DFL, Metrica and SkillCorner.</td></tr>
+              <tr><td>The kickoff of each half</td>
+                <td><code>D</code> up to the kickoff frame of <code>games.py</code>, then 1 s to the team that takes
+                  the kickoff (in the second half, the team that did not take the first), then the models.</td>
+                <td><code>games.py</code>, the rule of the rule engine, Law 8.</td></tr>
+              <tr><td>Other restarts, kickoffs after goals</td>
+                <td>Found by the models. The engine does not read Smart Tagging. We compared its output with the
+                  four goals that Smart Tagging marks: after each goal the engine gives the kickoff to the team that
+                  the tag does not name for the goal, as it should if the tag names the scorer, which we assume. The
+                  stoppage ends early: by 2 to 3 frames three times, by 2.8 s once.</td>
+                <td>The models.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="sub-p sub-p--after">The decoder's costs set how much evidence a short possession needs. Costs that
+          suit the frame-level labels of Metrica and DFL differ from those that suit PFF's coarser labels, and 12 for
+          each kind of change is a compromise between them.</p>
+        <h3 class="sub-h">The engine's settings</h3>
+        <div class="fig fig--wide">
+          <table class="rt rt--settings">
+            <thead><tr><th>setting</th><th>value</th><th>where the value comes from</th></tr></thead>
+            <tbody>
+              <tr><td>blend weight</td><td class="tnum">the network 0.75, the per-frame model 0.25</td>
+                <td>External: chosen against 0.5. At 0.25 the blend beats the network alone on Metrica, SkillCorner
+                  and the PFF design matches and trails it by 0.006 on DFL. 0.5 gave up more on DFL to gain more on
+                  PFF.</td></tr>
+              <tr><td>decoder change costs</td><td class="tnum">12 between the teams, 12 into or out of dead ball</td>
+                <td>External: a rule fixed in advance chose the cost, the best mean gain on Metrica and DFL, each
+                  labelled by models that never saw its provider. This pair came within 0.0002 of the best pair.
+                  Scores within 0.002 count as tied.</td></tr>
+              <tr><td>dead ball before each half's kickoff</td><td>on</td>
+                <td>The rule of the rule engine. The kickoff frames come from <code>games.py</code>.</td></tr>
+              <tr><td>kickoff team rule</td><td class="tnum">the first 1 s from each half's kickoff frame to the
+                  team that takes the kickoff</td>
+                <td>Law 8, not tuned: the kicking team plays the ball first and keeps it at least for the first pass.
+                  Measured on four of the tests of Section 03, it moves each gain by at most 0.0004 (mean +0.0001).</td></tr>
+              <tr><td>the network</td><td class="tnum">a linear layer of 64 units, a convolution over time (kernel 5),
+                  two recurrent layers of 64 units each way, a head on three classes</td>
+                <td>Chosen on external matches only, like every setting of the models.</td></tr>
+              <tr><td>outputs averaged</td><td class="tnum">4 seeds &times; 4 mirrored copies: 16</td>
+                <td>Chosen on external matches only.</td></tr>
+              <tr><td>per-frame model windows</td><td class="tnum">means over 0.5 to 4.5 s, never across a half</td>
+                <td>Chosen on external matches only.</td></tr>
+              <tr><td>proximity touch</td><td class="tnum">the ball visible, a team's nearest player within 1.8 m</td>
+                <td>Chosen on external matches only.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. The rule engine, step by step: built by sections/engine.js, leave this element empty -->
+    <section id="engine" class="story-section" data-section="engine" data-nav-group="config"></section>
+
+    <!-- 4. The rule engine's line, its choices and its settings ------------------------------ -->
+    <section id="rules" class="story-section" data-section="rules" data-nav-group="config">
+      <header class="section-head">
+        <p class="kicker"><span class="num">04</span> The possession rules <span class="sep">/</span> the fallback</p>
+        <h2>The rule engine's line for each situation</h2>
+        <p class="lede">The rule engine draws an explicit line for each situation that the organisers name. It writes
+          the whole output when the learned models are switched off. The engine keeps one of its rules:
+          the frames before each half's kickoff are dead ball.</p>
+      </header>
+      <div class="block step step--block" data-step="0">
+        <div class="fig fig--wide">
+          <table class="rt rt--rules">
+            <thead><tr><th>situation</th><th>the rule engine's rule</th><th>evidence</th></tr></thead>
+            <tbody>
+              <tr><td>Controlled possession: the other team kicks or receives the ball</td>
+                <td>A <strong>kick</strong> (speed gain over half the velocity change) or a <strong>reception</strong>
+                  (loss over half). The owner switches at the centre of the contact.</td>
+                <td>External: this owner rule won on all three Metrica matches.</td></tr>
+              <tr><td>When the new team took the ball</td>
+                <td><strong>Back-dating</strong>: the change moves back over the frames where the new team's nearest
+                  player is within 1.5 m of the visible ball and at least as near as the other team's, up to 2.8 s,
+                  if the possessions on both sides keep 1 s.</td>
+                <td>External: the cap is the 90th percentile of the lag of the rule engine's late changes behind
+                  the labels on Metrica's matches. The 1 s minimum is the threshold of its test. Switching it off in
+                  the rule engine loses 0.005 on Metrica's own tracking and 0.008 ATD-like, and 0.004 on DFL
+                  ATD-like. On DFL's own tracking the loss, 0.002, is not separable from zero.</td></tr>
+              <tr><td>Who played the ball at a contact</td>
+                <td>The team nearest within 1.5 m. Each team counts the smaller of its nearest distance over
+                  &plusmn;12 frames and its distance to the fitted contact point.</td>
+                <td>External: chosen on the eight Metrica and DFL matches among three mechanisms: the smaller of the two
+                  distances, the fitted point alone, or their mean. The fit's own parameters come from the measured
+                  kernel.</td></tr>
+              <tr><td>Controlled possession: a slow ball at a player's feet</td>
+                <td><strong>Slow-ball control</strong>: within 1.2 m, ball under 2.5 m/s, for 8 frames.</td>
+                <td>External: selected on Metrica's matches.</td></tr>
+              <tr><td>Controlled possession: a player runs with the ball</td>
+                <td><strong>Dribble</strong>: the same player within 1.0 m for 25 frames, ball over 2.5 m/s.</td>
+                <td>Physics: a free ball cannot stay within 1 m of one player for 1 s unless the player moves with it.</td></tr>
+              <tr><td>A simple touch without control, by the owning team</td>
+                <td>The last owner holds.</td>
+                <td>That team already owns the ball.</td></tr>
+              <tr><td>A deflection that does not intercept</td>
+                <td>The other team's redirect counts only if its next uncontested contact follows with no dead ball
+                  between, or the team-movement check confirms it.</td>
+                <td>The "no significant impact" clause of Metrica's possession definition. External: the
+                  team-movement threshold.</td></tr>
+              <tr><td>Contested or loose ball</td>
+                <td>Both teams within 1.5 m, distances under 0.4 m apart: no team. The last owner holds.</td>
+                <td>The challenge: possession stays with the last team that had it.</td></tr>
+              <tr><td>A touch with no tracked player near</td>
+                <td>Nobody within 1.5 m of the ball or of the fitted contact point: a distant touch, a contact of the
+                  team whose player is within 3.0 m, if the team-movement check confirms it.</td>
+                <td>External: precision on eight matches.</td></tr>
+              <tr><td>Aerial duel won without later control</td>
+                <td>No special rule. A header counts only if it shows as a contact.</td>
+                <td>External: 97% of fast receptions are correct, so an extra filter would discard good contacts.</td></tr>
+              <tr><td>Ball out</td>
+                <td>The stoppage starts at the observed crossing, or at one extrapolated up to 25 m, once the players
+                  stop together.</td>
+                <td>Law 9. External: 12 of the 13 Metrica ball exits with a known heading lie within 25 m.</td></tr>
+              <tr><td>Whistle with the ball rolling</td>
+                <td><strong>Pursuit stop</strong>: ball over 4 m/s, the 8 nearest players under 1.5 m/s within 6 s.</td>
+                <td>External: selected on the five DFL matches.</td></tr>
+              <tr><td>Ball lost by the tracker, players stopped</td>
+                <td><code>D</code> after 2 s under 1.6 m/s, dated at the knee.</td>
+                <td>External: speed selected on eight matches, offset measured on Metrica's stoppage starts.</td></tr>
+              <tr><td>Restart</td>
+                <td>A kick near a player (a rise over 3 m/s within 9 frames), or a ball that reappears over 2 m/s.
+                  Players over 1.6 m/s within 6 s, or a chained restart (the next kick of the passing sequence,
+                  confirmed within about 3.5 s), confirm it.</td>
+                <td>External: windows measured on eight matches, speeds selected on Metrica's.</td></tr>
+              <tr><td>The clear possessor after a restart</td>
+                <td>The nearest player, more confident when the set-piece tag or the last touch agrees.</td>
+                <td>Laws 15 to 17: the other team restarts after a ball out.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3 class="sub-h">The rule engine's choices, and what it rejected</h3>
+        <div class="fig fig--wide">
+          <table class="rt rt--choices">
+            <thead><tr><th>decision</th><th>why</th><th>alternative rejected</th></tr></thead>
+            <tbody>
+              <tr><td>Change the owner only at owner events</td>
+                <td>The labels change when the other team plays the ball.</td>
+                <td>The nearest player. It flips 14 to 25 frames early in 11 of the 16 public transitions into a
+                  team's possession and names the true team on 77.8% of live frames.</td></tr>
+              <tr><td>Contacts from a velocity change over &plusmn;12 frames</td>
+                <td>The tracker smooths the ball over about 0.9 s, so a contact shows as a bump about 24 frames wide.</td>
+                <td>A 3-frame velocity step. It is better on DFL's unsmoothed ball and worse on Metrica with an
+                  ATD-like ball, a ball smoothed like this match's (Section 03).</td></tr>
+              <tr><td>Measure a contact's distance to the fitted contact point too, and keep the smaller</td>
+                <td>The smoothed ball cuts the corner of every contact and passes about 2 m from the player who played it.</td>
+                <td>The fitted point alone, or the mean of the two distances. Both are worse on an unsmoothed ball,
+                  where the &plusmn;12-frame distance is already right.</td></tr>
+              <tr><td>A ball gap is <code>D</code> only if the players stop</td>
+                <td>The public window has live gaps of 5.3 and 9.3 s inside one possession.</td>
+                <td><code>X</code> in gaps. <code>spellF1</code> fills it with the previous label anyway and
+                  <code>macroF1</code> counts it as a miss. The rule engine writes <code>X</code> only on frames
+                  that are never graded.</td></tr>
+              <tr><td>Date such a stoppage at the knee, where the players' slowdown begins</td>
+                <td>The whistle comes before the players slow down.</td>
+                <td>The moment the players are already stopped. It is late by a median of 48 frames on Metrica's fouls.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3 class="sub-h">Where every setting comes from</h3>
+        <p class="sub-p">The <span class="tnum" data-bind="nFields">172</span> constants of the engine's settings
+          file, <code>engine/config.py</code>, those of the rule engine and those of the learned models, fall into
+          five classes. A setting of the rule engine that needs labels takes the weighted median of the per-match
+          optima on the eight Metrica and DFL matches, by a rule written down before the runs. Owner and restart-speed
+          settings are judged on Metrica's matches, stoppage-start settings on DFL's, the others on all eight. The
+          settings of the learned models were chosen on external matches.</p>
+        <div class="cf-classes" id="config-classes"></div>
+        <h3 class="sub-h">The rule engine's most influential settings</h3>
+        <div class="fig fig--wide">
+          <table class="rt rt--settings">
+            <thead><tr><th>setting</th><th>value</th><th>where the value comes from</th></tr></thead>
+            <tbody>
+              <tr><td>touch radius</td><td class="tnum">1.5 m</td><td>Physics.</td></tr>
+              <tr><td>back-dating cap</td><td class="tnum">2.8 s</td>
+                <td>External: the 90th percentile of the lag of the rule engine's late changes behind the labels
+                  on Metrica's matches.</td></tr>
+              <tr><td>contact half-window</td><td class="tnum">12 frames</td>
+                <td>Label-free: the tracker's smoothing kernel has its half maximum at &plusmn;11 frames.</td></tr>
+              <tr><td>contact point</td><td>the smaller of the &plusmn;12-frame nearest distance and the distance to the fitted contact point</td>
+                <td>External: chosen among three mechanisms on the eight Metrica and DFL matches. The fit spans kernel
+                  widths of 1 to 12 frames around the measured 9.5, a default never varied against labels.</td></tr>
+              <tr><td>contact threshold</td><td class="tnum">9 m/s</td>
+                <td>Label-free: the loosest threshold with at most 3 team changes per minute of live play on the full match.
+                  It is weakly determined, flat from 8 to 11.</td></tr>
+              <tr><td>kick or reception share of the velocity change</td><td class="tnum">0.5</td>
+                <td>Default, never varied against labels.</td></tr>
+              <tr><td>team-movement check</td><td class="tnum">1.45 m/s within 25 frames</td>
+                <td>External: 90th percentile over the touches of the team without the ball that did not win it, on
+                  the ATD-like references.</td></tr>
+              <tr><td>slow-ball control</td><td class="tnum">1.2 m, 2.5 m/s, 8 frames</td>
+                <td>External: selected on Metrica's matches. 8 frames is the centre of the search grid, because no value did
+                  better than the others.</td></tr>
+              <tr><td>dribble</td><td class="tnum">1.0 m for 25 frames</td><td>Physics.</td></tr>
+              <tr><td>stopped players</td><td class="tnum">1.6 m/s</td><td>External: selected on all eight matches.</td></tr>
+              <tr><td>offset from the knee to the stoppage start</td><td class="tnum">&minus;15 frames</td>
+                <td>External: median offset to the labelled stoppage start on Metrica's matches.</td></tr>
+              <tr><td>pursuit stop</td><td class="tnum">4 m/s, 8 players, 1.5 m/s</td><td>External: selected on DFL's matches.</td></tr>
+              <tr><td>nearest-player delay</td><td class="tnum">19 frames</td>
+                <td>External: median best delay on the eight matches.</td></tr>
+              <tr><td>frozen-ball radius</td><td class="tnum">3.75 m</td>
+                <td>Label-free: the valley of the nearest-player distance to a still ball on the full match.</td></tr>
+              <tr><td>decoder change costs</td><td class="tnum">8 (team), 6 (dead ball)</td>
+                <td>Defaults, never varied against labels.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="sub-p"><strong>Sensitivity.</strong> The selection rule picked twelve settings of the rule engine
+          from grids of values: the slow-ball control, the pursuit stop, the restart settings and the stopped-players
+          speed. One grid step either side moves the 8-match mean <code>spellF1</code> by at most 0.007 (0.004 for
+          eight of the twelve), so no selected value sits on a narrow peak.</p>
+        <details class="cf-all">
+          <summary>Every constant of the engine, with its class</summary>
+          <p class="sub-p muted">Each name is the constant's name in <code>engine/config.py</code>. The class comes
+            from our record of the source of every setting. The source file also carries a developer note for
+            each constant. The notes cite our internal working notes, so they are hidden here. Switch them on to
+            read them.</p>
+          <div class="fig fig--wide" id="config-fig"></div>
+        </details>
+      </div>
+    </section>
+
+    <!-- 5. Limitations and what next ------------------------------------------------------- -->
+    <section id="limits" class="story-section" data-section="limits">
+      <header class="section-head">
+        <p class="kicker"><span class="num">05</span> Limitations, and what next</p>
+        <h2>What the engine still gets wrong</h2>
+        <p class="lede">The two models have no held-out result of their own. On this match they end the restarts
+          after goals early, and in the public window they miss two short possessions. We do not know where the
+          organisers' labels sit between frame-level labels and coarser ones, so the decoder's costs are a
+          compromise.</p>
+      </header>
+      <div class="block step step--block" data-step="0">
+        <div class="tk-grid">
+          <article class="tk-card">
+            <h3>No held-out result for the two models</h3>
+            <p>The 15 held-out PFF matches ran once, on the earlier pair of models, with the same design and
+              settings but an earlier attacking-direction rule: +0.170 over the rule engine, above it on 15 of 15. The two models
+              of the engine were not run there (Section 03).</p>
+          </article>
+          <article class="tk-card">
+            <h3>SkillCorner's possession field</h3>
+            <p>With SkillCorner unseen, the engine is only level with the rule engine on SkillCorner's possession
+              field (+0.004, above it on 12 of 20 matches), and it splits more possessions: 41% of its possessions
+              share a labelled possession with another, against 36%. In stoppages with the ball visible it labels
+              about 57% of the stoppage as dead, against 67% for the rule engine. If this match's labels cut
+              possessions as finely, the engine may split some here too, and it may label too little of a stoppage as dead while the
+              ball stays visible.</p>
+          </article>
+          <article class="tk-card">
+            <h3>Restarts after goals end early</h3>
+            <p>The frames before the kickoff of each half are dead ball, and the first 1 s after it goes to the team
+              that takes the kickoff. The models find every other restart. The
+              engine does not read Smart Tagging. We compared its output with the four goals that Smart Tagging
+              marks: after each goal the engine gives the kickoff to the team that the tag does not name for the goal, as it should if the tag names the scorer, which we
+              assume. It ends those stoppages early: by 2 to 3 frames at three of them and by 2.8 s at one. The rule engine places those kickoffs on
+              a calibrated frame.</p>
+          </article>
+          <article class="tk-card">
+            <h3>Short possessions in the public window</h3>
+            <p>The engine finds 6 of the 12 public hand-overs, changes of possession straight from one team to the
+              other, within 25 frames. Four of its six misses are two short possessions of the home team, 19 and 33
+              frames long (0.76 s and 1.32 s), that it does not split from the away team's possession around them
+              (frames 15346 to 15365 and 15766 to 15799). The decoder charges 12 for each change of team, so a short
+              possession needs strong evidence.</p>
+            <p>Four of the twelve hand-overs (frames 11351, 11553, 13785 and 15766) have no player of the new team
+              within 1.5 m of the tracked ball near the change. The engine finds two of them, 11553 and 13785.</p>
+          </article>
+          <article class="tk-card">
+            <h3>The decoder's costs</h3>
+            <p>We do not know where the organisers' labels sit between frame-level labels and coarser ones. Costs
+              that suit the frame-level labels of Metrica and DFL differ from those that suit PFF's coarser labels,
+              and 12 for each kind of change is a compromise between them.</p>
+          </article>
+          <article class="tk-card">
+            <h3>The possession count</h3>
+            <p>Its ratio to the rule engine's count is 0.9462, 0.0002 below the range of the external matches
+              (0.9464 to 1.387), after the kickoff team rule (Section 03).</p>
+          </article>
+          <article class="tk-card tk-card--next">
+            <h3>Next, with more time</h3>
+            <p>The restart after a goal, the home-or-away decisions on SkillCorner's possession field, and a run of
+              this match on Intel or AMD hardware.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. Pipeline check: the public transitions ------------------------------------------ -->
+    <section id="forensics" class="story-section" data-section="forensics" data-nav-group="limits">
+      <header class="section-head">
+        <p class="kicker"><span class="num">05</span> Limitations <span class="sep">/</span> pipeline check</p>
+        <h2>The public window, transition by transition</h2>
+        <p class="lede">A pipeline check on 17 possessions, scored once, for information, after the settings were final. It shows where
+          the limitations above appear in the one labelled window. Each lollipop is one transition of the ground
+          truth. Its height is the engine's latency in frames, and a negative value is early.</p>
+      </header>
+      <div class="block step step--block" data-step="0">
+        <div class="fig fig--wide" id="forensics-fig"></div>
+      </div>
+    </section>
+
+    <!-- 6. What we tried and did not use -------------------------------------------------- -->
+    <section id="tried" class="story-section" data-section="tried">
+      <header class="section-head">
+        <p class="kicker"><span class="num">06</span> What we tried and did not use</p>
+        <h2>Ideas the external matches turned down</h2>
+        <p class="lede">Each idea ran on the external matches before a decision. None of them is in the
+          engine. The first table holds the ideas for the learned models, the second those for the rule engine, the
+          fallback.</p>
+      </header>
+      <div class="block step step--block" data-step="0">
+        <div class="fig fig--wide">
+          <table class="rt rt--tried">
+            <thead><tr><th>idea for the learned models</th><th>result on the external matches</th><th>why not used</th></tr></thead>
+            <tbody>
+              <tr><td>All still balls kept visible, not half of them</td>
+                <td>No better</td>
+                <td>No gain over the submitted training inputs.</td></tr>
+              <tr><td>Track repair, new features of each team's shape, wider defect ranges</td>
+                <td>No gain</td>
+                <td>No gain over the submitted training inputs.</td></tr>
+              <tr><td>Four variants of the per-frame model: SkillCorner in the team model with a source flag, weights for
+                  short possessions, training on defect copies only, the rule engine's detected kicks and receptions as input</td>
+                <td>None better</td>
+                <td>No variant beat the submitted per-frame model.</td></tr>
+              <tr><td>Separate blend weights for the dead-ball and the home-or-away decisions</td>
+                <td>Nine pairs: none cleared its margin</td>
+                <td>One weight, 0.25 for the per-frame model, serves both decisions.</td></tr>
+              <tr><td>A richer decoder: minimum durations, separate costs into and out of dead ball, a dead-ball bias</td>
+                <td>No gain, tested twice</td>
+                <td>Two costs of 12 do as well.</td></tr>
+              <tr><td>The rule engine's labels as a prior</td>
+                <td>Accepted by the unseen-provider tests</td>
+                <td>It lowers <code>spellF1</code> on the PFF design matches.</td></tr>
+              <tr><td>Two earlier networks: alone, or as a hybrid that keeps the rule engine's dead ball and lets the
+                  network choose the team on live frames</td>
+                <td>Alone, +0.192 and +0.171 over an earlier rule engine on 28 external matches (the 8 Metrica and DFL and
+                  the 20 SkillCorner matches), 2-second labels</td>
+                <td>Each failed a label-free check on this match. One network's four seeds, and its mirrored
+                  copies, disagreed too much. The other, which also trained on 43 PFF matches, wrote longer
+                  possessions here than the labels of any external match hold.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3 class="sub-h">Ideas for the rule engine</h3>
+        <div class="fig fig--wide">
+          <table class="rt rt--tried">
+            <thead><tr><th>idea for the rule engine</th><th>result on the external matches (positive: a gain)</th><th>why not used</th></tr></thead>
+            <tbody>
+              <tr><td>A back-dating that keeps 1&nbsp;s only for the possession before the change</td>
+                <td>Metrica +0.006 own tracking, +0.008 ATD-like. DFL +0.003 own tracking, +0.004 ATD-like</td>
+                <td>On a Metrica match, on both own and ATD-like tracking, it moved the start of an existing possession and left it shorter than 1&nbsp;s, which its test, fixed in advance, forbids. The rule engine keeps 1&nbsp;s on both sides.</td></tr>
+              <tr><td>Learned owner correction inside ball gaps</td>
+                <td>Held-out Metrica: +0.006 with the ball hidden at random, &minus;0.002 to &minus;0.004 on three tests that hide the ball during live play</td>
+                <td>Its test, fixed in advance, allowed no loss on any Metrica match or on the live-gap tests.</td></tr>
+              <tr><td>Learned removal of stoppages found only from a ball gap</td>
+                <td>+0.000 with the ball hidden at random, interval across zero</td>
+                <td>No reliable gain.</td></tr>
+              <tr><td>Restart-kick delay estimated per match, not fixed</td>
+                <td>Own tracking Metrica +0.011 to +0.013. ATD-like 0 to +0.001, no interval above zero</td>
+                <td>Its test, fixed in advance, needed an interval above zero on Metrica with an ATD-like ball.</td></tr>
+              <tr><td>Kickoff found by Law 8: both teams in their own halves, then players cross the halfway line</td>
+                <td>Exactly 0 on all eight matches. No frame of this match changed</td>
+                <td>It changes nothing.</td></tr>
+              <tr><td>No owner, instead of the last team, after a contested contact</td>
+                <td>+0.013 <span class="ci">[+0.007, +0.020]</span> on all eight, but Sample Game 3 &minus;0.019
+                  <span class="ci">[&minus;0.035, &minus;0.001]</span></td>
+                <td>It gains only on DFL, whose labels switch the owner at a single touch.</td></tr>
+              <tr><td>Owner switched when a pass to the other team leaves the foot, not at its reception</td>
+                <td>&minus;0.040 own tracking, &minus;0.042 ATD-like</td>
+                <td>It costs on both providers.</td></tr>
+              <tr><td>Contact half-window of 10 or 14 frames</td>
+                <td>14: Metrica &minus;0.008, DFL &minus;0.009. 10: not separable from 12</td>
+                <td>12 kept from the kernel measurement.</td></tr>
+              <tr><td>A contact's distance from the fitted contact point alone, or the mean of the two distances</td>
+                <td>Own tracking Metrica: the right team on 94.7% and 96.9% of attributed contacts, against 98.9% for the &plusmn;12-frame distance</td>
+                <td>It loses where the ball is not smoothed.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3 class="sub-h">Data we did not use</h3>
+        <div class="fig fig--wide">
+          <table class="rt rt--tried">
+            <thead><tr><th>data</th><th>what it offers</th><th>why not used</th></tr></thead>
+            <tbody>
+              <tr><td>The broadcast tracking of this match</td>
+                <td>Fills only 12.2% and 12.9% of the ball gaps of the tactical tracking</td>
+                <td>Both trackers lose the ball together.</td></tr>
+              <tr><td>The homography</td>
+                <td>The mapping from the video to the pitch</td>
+                <td>The tracking positions are already on the pitch plane.</td></tr>
+              <tr><td>Video ball detection</td>
+                <td>About 6% of graded frames to gain</td>
+                <td>It needs 2 to 3 GPU days.</td></tr>
+              <tr><td>Audio whistle</td>
+                <td>Not run</td>
+                <td>In the rule engine, the pursuit stop finds a rolling-ball whistle from the players.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. Reproduction ----------------------------------------------------------------- -->
+    <section id="repro" class="story-section" data-section="repro">
+      <header class="section-head">
+        <p class="kicker"><span class="num">07</span> Reproduction</p>
+        <h2>One command, byte for byte</h2>
+        <p class="lede">The engine needs Python 3.9 to 3.12, two pinned packages and the organisers' data bundle.
+          It reads the tactical ATD and <code>games.py</code>, and loads two weights files from
+          <code>engine/models/</code>. It never trains. Two runs and a fresh clone give the same md5. One configuration
+          setting restores the rule engine and writes its labels instead.</p>
+      </header>
+      <div class="block step step--block" data-step="0">
+        <div class="fig fig--wide" id="repro-fig"></div>
+      </div>
+    </section>
+
+    <!-- 8. Team ------------------------------------------------------------------------- -->
+    <section id="team" class="story-section" data-section="team">
+      <div class="block step step--block" data-step="0">
+        <div id="team-fig"></div>
+      </div>
+    </section>
+  </main>
+
+  <div class="loading" id="loading" aria-live="polite">
+    <div class="loading-bars" aria-hidden="true"><i></i><i></i><i></i></div>
+    <p>Loading the bundle</p>
+  </div>
+  <noscript><p class="noscript">This page draws its figures with JavaScript. Turn it on to see them.</p></noscript>
+</body>
+</html>

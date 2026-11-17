@@ -1,0 +1,26 @@
+# The data-free test suite on every push and pull request (P9-D, CODE-REVIEW-RESPONSE finding 8).
+# The match data is not in the repository, so the tests that need it skip. Never add the data here.
+name: tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+      - name: Install the pinned packages
+        run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Refuse match data in the checkout
+        run: test -z "$(ls data | grep -v '^README.md$')"
+      - name: Run the tests
+        run: python -m pytest -q -rs

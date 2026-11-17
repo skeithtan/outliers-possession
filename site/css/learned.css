@@ -1,0 +1,1312 @@
+/* "From tracking to labels": the submitted engine step by step (sections/learned.js).
+   The layout is the shared .scrolly grid of base.css. Colours come from tokens.css. */
+
+#learned .lw-head h2 {
+  max-width: 26ch;
+}
+
+#learned .lw-kicker {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--size-label);
+  letter-spacing: 0.08em;
+  color: var(--gt);
+}
+
+#learned .step-copy h3 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--size-h2);
+  line-height: var(--line-tight);
+}
+
+#learned .step-copy p {
+  margin: 0 0 var(--space-3);
+}
+
+#learned .step-copy p:last-child {
+  margin-bottom: 0;
+}
+
+#learned .k-const {
+  display: inline-block;
+  padding: 0 0.4em;
+  margin: 0.05em 0;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-small);
+  background: var(--panel);
+  font-size: 0.86em;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+#learned .k-const b {
+  font-family: var(--font-mono);
+  color: var(--text);
+}
+
+/* -- the figure ------------------------------------------------------------------------------- */
+
+#learned .lw-fig {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: clamp(0.75rem, 1.3vw, 1.4rem);
+}
+
+#learned .lw-pipe {
+  flex: 0 0 auto;
+}
+
+#learned .lp {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+#learned .lp--wide {
+  max-height: 27vh;
+}
+
+#learned .lp--narrow {
+  display: none;
+}
+
+#learned .lp-box {
+  fill: var(--panel-2);
+  stroke: var(--line-strong);
+  stroke-width: 1.2;
+  transition: stroke var(--dur) var(--ease-out), fill var(--dur) var(--ease-out);
+}
+
+#learned .lp-label {
+  fill: var(--muted);
+  font-family: var(--font-sans);
+  font-weight: 650;
+  transition: fill var(--dur) var(--ease-out);
+}
+
+#learned .lp-sub {
+  fill: var(--muted);
+  opacity: 0.75;
+  font-family: var(--font-sans);
+  letter-spacing: 0.02em;
+}
+
+#learned .lp-node {
+  cursor: pointer;
+  outline: none;
+  transition: opacity var(--dur) var(--ease-out);
+}
+
+#learned .lp-node:focus-visible .lp-box {
+  stroke: var(--text);
+}
+
+#learned .lp-node--fallback .lp-box {
+  fill: rgba(11, 14, 20, 0.6);
+  stroke-dasharray: 5 4;
+}
+
+#learned .lp-node.is-active .lp-box {
+  fill: #1c1910;
+  stroke: var(--gt);
+  stroke-width: 2;
+  filter: drop-shadow(0 0 6px rgba(255, 209, 102, 0.38));
+}
+
+#learned .lp-node.is-active .lp-label {
+  fill: var(--text);
+}
+
+#learned .lp-node.is-active .lp-sub {
+  fill: #f1dca4;
+  opacity: 0.9;
+}
+
+#learned .lp-line,
+#learned .lp-head {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke var(--dur) var(--ease-out);
+}
+
+#learned .lp-edge--fallback .lp-line {
+  stroke-dasharray: 4 5;
+}
+
+#learned .lp-edge.is-active .lp-line {
+  stroke: var(--gt);
+  stroke-dasharray: 5 6;
+  animation: lp-flow 1s linear infinite;
+}
+
+#learned .lp-edge.is-active .lp-head {
+  stroke: var(--gt);
+}
+
+/* At the fallback step the learned stages step back. */
+#learned .lp.is-fallback .lp-node[data-node="features"],
+#learned .lp.is-fallback .lp-node[data-node="network"],
+#learned .lp.is-fallback .lp-node[data-node="perframe"],
+#learned .lp.is-fallback .lp-node[data-node="blend"],
+#learned .lp.is-fallback .lp-node[data-node="decoder"] {
+  opacity: 0.35;
+}
+
+@keyframes lp-flow {
+  to { stroke-dashoffset: -22; }
+}
+
+/* -- the panels ------------------------------------------------------------------------------- */
+
+#learned .lw-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+#learned .lw-panel {
+  grid-area: 1 / 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius);
+  border: 1px solid var(--hairline);
+  background: linear-gradient(180deg, rgba(11, 14, 20, 0.55), rgba(11, 14, 20, 0.25));
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(10px);
+  transition: opacity 450ms var(--ease-out), transform 450ms var(--ease-out), visibility 0s linear 450ms;
+}
+
+#learned .lw-panel.is-on {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition: opacity 450ms var(--ease-out), transform 450ms var(--ease-out), visibility 0s linear 0s;
+}
+
+/* the body of a panel sits in the middle of the room under its heading */
+#learned .lw-ph + * {
+  margin-top: auto;
+}
+
+#learned .lw-panel > :last-child {
+  margin-bottom: auto;
+}
+
+#learned .lw-ph {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0;
+  font-size: var(--size-label);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+#learned .lw-ph b {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: rgba(255, 209, 102, 0.12);
+  color: var(--gt);
+  font-family: var(--font-mono);
+  letter-spacing: 0;
+}
+
+#learned .lw-cap {
+  margin: 0;
+  font-size: var(--size-label);
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+#learned .lw-fill {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+/* keys and legends */
+
+#learned .lw-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.2rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--size-small);
+  color: #c9d0dc;
+}
+
+#learned .lw-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+#learned .lw-legend--inline {
+  font-size: var(--size-label);
+}
+
+#learned .lw-key {
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 2px;
+  vertical-align: middle;
+}
+
+#learned .lw-key--dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  margin: 0 0.18rem;
+  border-radius: 50%;
+  background: var(--text);
+  opacity: 0.8;
+}
+
+#learned .lw-key--jump { color: var(--rejected); }
+#learned .lw-key--short { color: var(--onset); }
+
+#learned .lw-key--jump::before,
+#learned .lw-key--jump::after,
+#learned .lw-key--short::before,
+#learned .lw-key--short::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2px;
+  height: 0.85rem;
+  border-radius: 1px;
+  background: currentColor;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+#learned .lw-key--jump::after,
+#learned .lw-key--short::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+#learned .lw-key--line {
+  width: 1.1rem;
+  height: 3px;
+  background: var(--ok);
+}
+
+#learned .lw-key--h { background: var(--h); }
+#learned .lw-key--a { background: var(--a); }
+#learned .lw-key--d { background: var(--d); }
+
+/* 1. cleaning */
+
+#learned .lw-clean {
+  width: 100%;
+  height: 100%;
+}
+
+#learned .lw-clean-path {
+  fill: none;
+  stroke: var(--ok);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+}
+
+#learned .is-play .lw-clean-path {
+  animation: lw-draw 1.6s var(--ease-out) 0.25s both;
+}
+
+#learned .lw-dot {
+  fill: var(--text);
+  opacity: 0.78;
+}
+
+#learned .lw-x {
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+#learned .lw-x--jump { stroke: var(--rejected); }
+#learned .lw-x--short { stroke: var(--onset); }
+
+#learned .lw-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1.3rem;
+  margin: 0;
+  padding: var(--space-3) 0 0;
+  border-top: 1px solid var(--hairline);
+  list-style: none;
+  font-size: var(--size-label);
+  color: var(--muted);
+}
+
+#learned .lw-checks li::before {
+  content: "\2713";
+  margin-right: 0.4rem;
+  font-weight: 700;
+  color: var(--ok);
+}
+
+/* 2. features */
+
+#learned .lw-heatwrap {
+  gap: var(--space-3);
+}
+
+#learned .lw-heat-names {
+  display: flex;
+  flex-direction: column;
+  row-gap: 2.83%;
+  flex: 0 0 auto;
+  width: 9.5rem;
+}
+
+#learned .lw-hn {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 0;
+  padding-left: 0.6rem;
+  border-left: 3px solid var(--text);
+  font-size: var(--size-label);
+  line-height: 1.25;
+  color: #c9d0dc;
+}
+
+#learned .lw-hn b {
+  font-size: 1.05rem;
+  color: var(--text);
+}
+
+#learned .lw-hn--h { border-left-color: var(--h); }
+#learned .lw-hn--a { border-left-color: var(--a); }
+
+#learned .lw-heatbox {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+#learned .lw-heat {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#learned .is-play .lw-heat {
+  animation: lw-wipe 1.3s var(--ease-out) 0.1s both;
+}
+
+#learned .lw-cell--g { fill: var(--text); }
+#learned .lw-cell--h { fill: var(--h); }
+#learned .lw-cell--a { fill: var(--a); }
+
+#learned .lw-heat-t {
+  position: absolute;
+  right: 0;
+  bottom: -1.15rem;
+  font-size: 0.66rem;
+  color: var(--muted);
+}
+
+#learned .lw-heat-t::after {
+  content: " \2192";
+}
+
+#learned .lw-turn {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-5);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--hairline);
+}
+
+#learned .lw-turn figure {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0;
+}
+
+#learned .lw-mini {
+  width: 7rem;
+  height: auto;
+}
+
+#learned .lw-mini-pitch {
+  fill: #0f241d;
+  stroke: rgba(232, 236, 243, 0.3);
+}
+
+#learned .lw-mini-line {
+  fill: none;
+  stroke: rgba(232, 236, 243, 0.3);
+}
+
+#learned .lw-mini-raw {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 2;
+  stroke-dasharray: 3 3;
+}
+
+#learned .lw-mini-home {
+  fill: none;
+  stroke: var(--h);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+#learned .lw-turn figcaption,
+#learned .lw-turn-key {
+  margin: 0;
+  font-size: var(--size-label);
+  color: var(--muted);
+}
+
+#learned .lw-turn-key {
+  line-height: 1.8;
+}
+
+#learned .lw-turn-key .lw-key {
+  margin-right: 0.45rem;
+}
+
+#learned .lw-key--raw {
+  width: 1.1rem;
+  height: 0;
+  border-top: 2px dashed var(--muted);
+  border-radius: 0;
+}
+
+#learned .lw-key--home {
+  width: 1.1rem;
+  height: 3px;
+  background: var(--h);
+}
+
+/* 3. the network */
+
+#learned .lw-chain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.45rem;
+}
+
+#learned .lw-block {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.2rem;
+  min-width: 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-small);
+  background: var(--panel-2);
+}
+
+#learned .lw-block b {
+  font-size: var(--size-small);
+  font-weight: 650;
+  color: var(--text);
+}
+
+#learned .lw-block span {
+  font-size: var(--size-label);
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+#learned .lw-block--gru {
+  flex-grow: 1.3;
+  border-color: rgba(255, 209, 102, 0.45);
+  background: rgba(255, 209, 102, 0.05);
+}
+
+#learned .lw-gru-dir i {
+  margin-right: 0.25rem;
+  font-style: normal;
+  color: var(--gt);
+}
+
+#learned .lw-hads {
+  display: flex;
+  gap: 0.25rem;
+}
+
+#learned .lw-hads .chip {
+  font-style: normal;
+}
+
+#learned .lw-arrow {
+  align-self: center;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+#learned .is-play .lw-chain > * {
+  animation: lw-rise 500ms var(--ease-out) both;
+}
+
+#learned .is-play .lw-chain > :nth-child(2) { animation-delay: 60ms; }
+#learned .is-play .lw-chain > :nth-child(3) { animation-delay: 120ms; }
+#learned .is-play .lw-chain > :nth-child(4) { animation-delay: 180ms; }
+#learned .is-play .lw-chain > :nth-child(5) { animation-delay: 240ms; }
+#learned .is-play .lw-chain > :nth-child(6) { animation-delay: 300ms; }
+#learned .is-play .lw-chain > :nth-child(7) { animation-delay: 360ms; }
+#learned .is-play .lw-chain > :nth-child(8) { animation-delay: 420ms; }
+#learned .is-play .lw-chain > :nth-child(9) { animation-delay: 480ms; }
+
+#learned .lw-sub-h {
+  margin: var(--space-2) 0 0;
+  font-size: var(--size-label);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+#learned .lw-ens-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-5);
+}
+
+#learned .lw-ens {
+  display: grid;
+  grid-template-columns: auto repeat(4, minmax(2.6rem, 4.6rem));
+  align-items: center;
+  gap: 0.35rem;
+}
+
+#learned .lw-ens-col,
+#learned .lw-ens-row {
+  font-size: 0.68rem;
+  line-height: 1.2;
+  color: var(--muted);
+}
+
+#learned .lw-ens-col {
+  text-align: center;
+}
+
+#learned .lw-ens-row {
+  padding-right: 0.35rem;
+  white-space: nowrap;
+}
+
+#learned .lw-ens-cell {
+  display: block;
+  height: 1.35rem;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--h) 0 var(--p1), var(--d) var(--p1) var(--p2), var(--a) var(--p2) 100%);
+  opacity: 0.88;
+}
+
+#learned .is-play .lw-ens .lw-ens-cell {
+  animation: lw-pop 350ms var(--ease-out) both;
+  animation-delay: calc(var(--k) * 40ms + 250ms);
+}
+
+#learned .lw-ens-out {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+#learned .lw-block--mean {
+  min-width: 11rem;
+  border-color: var(--gt);
+}
+
+#learned .lw-ens-cell--mean {
+  height: 0.9rem;
+  margin: 0.15rem 0;
+}
+
+/* 4. the per-frame model */
+
+#learned .lw-bar-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+#learned .lw-bar-total {
+  margin: 0;
+  font-size: var(--size-small);
+  color: #c9d0dc;
+}
+
+#learned .lw-bar-total b {
+  margin-right: 0.35rem;
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+#learned .lw-bar {
+  display: flex;
+  gap: 2px;
+  height: 1.1rem;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+#learned .is-play .lw-bar {
+  animation: lw-wipe 1s var(--ease-out) 0.1s both;
+}
+
+#learned .lw-seg--base,
+#learned .lw-key--base {
+  background: rgba(232, 236, 243, 0.62);
+}
+
+#learned .lw-seg--touch,
+#learned .lw-key--touch {
+  background: var(--ok);
+}
+
+#learned .lw-seg--win,
+#learned .lw-key--win {
+  background: repeating-linear-gradient(90deg, rgba(232, 236, 243, 0.34) 0 6px, rgba(232, 236, 243, 0.16) 6px 8px);
+}
+
+#learned .lw-bar-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1.2rem;
+  font-size: var(--size-label);
+  color: #c9d0dc;
+}
+
+#learned .lw-bar-key span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+#learned .lw-trees {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+#learned .lw-treecard {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-small);
+  background: var(--panel-2);
+}
+
+#learned .lw-treecard b {
+  display: block;
+  font-size: var(--size-small);
+  font-weight: 650;
+}
+
+#learned .lw-treecard span {
+  font-size: var(--size-label);
+  color: var(--muted);
+}
+
+#learned .lw-tree {
+  flex: 0 0 auto;
+  width: 3.4rem;
+}
+
+#learned .lw-tree-e {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 1.5;
+}
+
+#learned .lw-tree-n { fill: var(--text); }
+#learned .lw-tree--d .lw-tree-l { fill: var(--d); }
+#learned .lw-tree--d .lw-tree-l--b { fill: var(--ok); }
+#learned .lw-tree--ha .lw-tree-l { fill: var(--h); }
+#learned .lw-tree--ha .lw-tree-l--b { fill: var(--a); }
+
+#learned .lw-formula {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.6rem;
+  margin: 0;
+  padding: 0.6rem 0.85rem;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-small);
+  background: rgba(255, 255, 255, 0.025);
+  font-family: var(--font-mono);
+  font-size: var(--size-small);
+  color: #c9d0dc;
+}
+
+#learned .lw-formula i {
+  color: var(--text);
+}
+
+/* 5 and 6. probability rows */
+
+#learned .lw-rows {
+  display: grid;
+  grid-template-columns: minmax(6.5rem, 9.5rem) minmax(0, 1fr);
+  align-content: center;
+  gap: 0.55rem 0.9rem;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+#learned .lw-row {
+  display: contents;
+}
+
+#learned .lw-row-label {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0.1rem;
+  text-align: right;
+  font-size: var(--size-small);
+  line-height: 1.25;
+}
+
+#learned .lw-row-label b {
+  font-weight: 650;
+  color: var(--text);
+}
+
+#learned .lw-weight {
+  font-size: var(--size-label);
+  color: var(--muted);
+}
+
+#learned .lw-row-chart {
+  position: relative;
+  height: 4.4rem;
+  overflow: hidden;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+#learned .lw-row--strip .lw-row-chart {
+  height: 1.15rem;
+}
+
+#learned .lw-panel--4 .lw-rows {
+  grid-template-rows: repeat(3, minmax(3.2rem, 7.5rem)) auto;
+}
+
+#learned .lw-panel--5 .lw-rows {
+  grid-template-rows: minmax(3.2rem, 9rem) auto auto auto;
+}
+
+#learned .lw-panel--4 .lw-row-chart,
+#learned .lw-panel--5 .lw-row--blend .lw-row-chart {
+  height: auto;
+}
+
+#learned .lw-area,
+#learned .lw-strip {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#learned .lw-a-h { fill: var(--h); opacity: 0.86; }
+#learned .lw-a-a { fill: var(--a); opacity: 0.86; }
+#learned .lw-a-d { fill: var(--d); opacity: 0.8; }
+#learned .lw-s-h { fill: var(--h); }
+#learned .lw-s-a { fill: var(--a); }
+#learned .lw-s-d { fill: var(--d); }
+
+#learned .is-play .lw-row--net .lw-row-chart,
+#learned .is-play .lw-row--pf .lw-row-chart,
+#learned .is-play .lw-panel--4 .lw-row--blend .lw-row-chart {
+  animation: lw-wipe 1.1s var(--ease-out) both;
+}
+
+#learned .is-play .lw-row--pf .lw-row-chart { animation-delay: 0.15s; }
+#learned .is-play .lw-panel--4 .lw-row--blend .lw-row-chart { animation-delay: 0.45s; }
+
+#learned .is-play .lw-row--decoded .lw-row-chart {
+  animation: lw-wipe 1.4s var(--ease-out) 0.3s both;
+}
+
+#learned .lw-row--decoded .lw-row-label b {
+  color: var(--gt);
+}
+
+#learned .lw-axis {
+  position: relative;
+  height: 1rem;
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+
+#learned .lw-axis span {
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+#learned .lw-axis span:first-child { transform: none; }
+#learned .lw-axis span:last-child { transform: translateX(-100%); }
+
+#learned .lw-flag {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  border: 1.5px dashed var(--gt);
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px rgba(11, 14, 20, 0.4);
+  pointer-events: none;
+  transition: border-color var(--dur-fast);
+}
+
+#learned .lw-flag.is-kept {
+  border-color: var(--a);
+  border-style: solid;
+}
+
+#learned .lw-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-2) var(--space-5);
+}
+
+#learned .lw-range-label {
+  padding-top: 0.15rem;
+  font-size: var(--size-small);
+  color: #c9d0dc;
+  white-space: nowrap;
+}
+
+#learned .lw-cost-v {
+  display: inline-block;
+  min-width: 2.2em;
+  margin-left: 0.3rem;
+  font-family: var(--font-mono);
+  color: var(--gt);
+}
+
+#learned .lw-range-wrap {
+  position: relative;
+  flex: 1 1 14rem;
+  padding-bottom: 1.6rem;
+}
+
+#learned .lw-range {
+  width: 100%;
+  margin: 0.25rem 0 0;
+  accent-color: var(--gt);
+}
+
+#learned .lw-range-tick {
+  position: absolute;
+  top: 1.65rem;
+  transform: translateX(-50%);
+  font-size: 0.68rem;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+#learned .lw-range-tick::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -0.45rem;
+  width: 1px;
+  height: 0.35rem;
+  background: var(--muted);
+}
+
+#learned .lw-verdict {
+  margin: 0;
+  font-size: var(--size-small);
+  color: #c9d0dc;
+}
+
+#learned .lw-readout {
+  margin: 0;
+  font-size: var(--size-label);
+  color: var(--muted);
+}
+
+/* 7. the fallback */
+
+#learned .lw-lanes {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-3);
+}
+
+#learned .lw-lane {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto minmax(0, 17rem);
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.9rem 1.1rem;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  opacity: 0.42;
+  transition: opacity var(--dur) var(--ease-out), border-color var(--dur) var(--ease-out),
+    background var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out);
+}
+
+#learned .lw-lane.is-on {
+  opacity: 1;
+  border-color: rgba(255, 209, 102, 0.55);
+  background: rgba(255, 209, 102, 0.05);
+  box-shadow: 0 0 1.5rem rgba(255, 209, 102, 0.08);
+}
+
+#learned .lw-switch .k-const {
+  font-size: 0.95rem;
+}
+
+#learned .lw-lane.is-on .lw-switch .k-const {
+  border-color: var(--gt);
+}
+
+#learned .lw-lane-body b {
+  display: block;
+  font-size: var(--size-small);
+  font-weight: 650;
+}
+
+#learned .lw-lane-body span {
+  font-size: var(--size-label);
+  color: var(--muted);
+}
+
+#learned .lw-lane-out span {
+  display: block;
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+#learned .lw-lane-out code {
+  font-size: 0.72rem;
+  color: #c9d0dc;
+  overflow-wrap: anywhere;
+}
+
+#learned .lw-fb-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+}
+
+#learned .lw-fb-foot .lw-cap {
+  flex: 1 1 18rem;
+}
+
+/* -- motion ---------------------------------------------------------------------------------- */
+
+@keyframes lw-draw {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes lw-wipe {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+
+@keyframes lw-rise {
+  from { opacity: 0; transform: translateY(6px); }
+}
+
+@keyframes lw-pop {
+  from { opacity: 0; transform: scale(0.6); }
+}
+
+/* -- short screens ---------------------------------------------------------------------------- */
+
+@media (max-height: 820px) and (min-width: 901px) {
+  #learned .lw-panel {
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+  }
+
+  #learned .lw-row-chart {
+    height: 3.4rem;
+  }
+
+  #learned .lw-cap {
+    display: none;
+  }
+}
+
+/* -- narrow screens: the figure sits above the text (base.css) -------------------------------- */
+
+@media (max-width: 900px) {
+  /* The step copy is long, so it scrolls under the figure instead of over it. */
+  #learned .scrolly .figure {
+    height: 50vh;
+    min-height: 21rem;
+    z-index: 3;
+    box-shadow: 0 0.75rem 1.5rem var(--bg);
+  }
+
+  #learned .scrolly .steps {
+    z-index: 1;
+    padding-bottom: 30vh;
+  }
+
+  #learned .step {
+    min-height: 0;
+    align-items: flex-start;
+    padding: var(--space-6) 0 32vh;
+  }
+
+  #learned .step-copy {
+    box-shadow: none;
+  }
+
+  #learned .lp--wide {
+    display: none;
+  }
+
+  #learned .lp--narrow {
+    display: block;
+  }
+
+  #learned .lw-fig {
+    gap: var(--space-2);
+    padding: var(--space-2);
+  }
+
+  #learned .lw-panel {
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  #learned .lw-ph {
+    font-size: 0.62rem;
+  }
+
+  #learned .lw-ph b {
+    width: 1.2rem;
+    height: 1.2rem;
+  }
+
+  #learned .lw-cap,
+  #learned .lw-checks,
+  #learned .lw-readout,
+  #learned .lw-sub-h,
+  #learned .lw-turn-key,
+  #learned .lw-formula,
+  #learned .lw-flip {
+    display: none;
+  }
+
+  #learned .lw-legend {
+    gap: 0.15rem 0.8rem;
+    font-size: 0.68rem;
+  }
+
+  #learned .lw-heat-names {
+    width: 6.2rem;
+  }
+
+  #learned .lw-hn {
+    font-size: 0.62rem;
+    padding-left: 0.4rem;
+  }
+
+  #learned .lw-hn b {
+    font-size: 0.85rem;
+  }
+
+  #learned .lw-turn {
+    margin-top: var(--space-2);
+    padding-top: var(--space-2);
+    gap: var(--space-3);
+  }
+
+  #learned .lw-mini {
+    width: 4.6rem;
+  }
+
+  #learned .lw-chain {
+    gap: 0.3rem;
+  }
+
+  #learned .lw-chain .lw-arrow {
+    display: none;
+  }
+
+  #learned .lw-block {
+    flex: 1 1 28%;
+    padding: 0.35rem 0.5rem;
+  }
+
+  #learned .lw-block b {
+    font-size: 0.72rem;
+  }
+
+  #learned .lw-block span {
+    font-size: 0.62rem;
+  }
+
+  #learned .lw-ens {
+    grid-template-columns: auto repeat(4, minmax(2rem, 2.6rem));
+    gap: 0.2rem;
+  }
+
+  #learned .lw-ens-col,
+  #learned .lw-ens-row {
+    font-size: 0.52rem;
+  }
+
+  #learned .lw-ens-cell {
+    height: 0.85rem;
+  }
+
+  #learned .lw-ens-wrap {
+    flex-wrap: nowrap;
+    gap: var(--space-2);
+  }
+
+  #learned .lw-ens-out {
+    gap: 0.3rem;
+  }
+
+  #learned .lw-block--mean {
+    min-width: 6.5rem;
+  }
+
+  #learned .lw-bar-total b {
+    font-size: 1.2rem;
+  }
+
+  #learned .lw-bar-key {
+    font-size: 0.64rem;
+    gap: 0.2rem 0.8rem;
+  }
+
+  #learned .lw-trees {
+    gap: var(--space-2);
+  }
+
+  #learned .lw-treecard {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.3rem;
+    padding: 0.4rem 0.55rem;
+  }
+
+  #learned .lw-treecard b {
+    font-size: 0.68rem;
+  }
+
+  #learned .lw-treecard span {
+    display: none;
+  }
+
+  #learned .lw-tree {
+    width: 1.9rem;
+  }
+
+  #learned .lw-rows {
+    grid-template-columns: 5.6rem minmax(0, 1fr);
+    gap: 0.35rem 0.55rem;
+  }
+
+  #learned .lw-row-label {
+    font-size: 0.66rem;
+  }
+
+  #learned .lw-row-chart {
+    height: 2.5rem;
+  }
+
+  #learned .lw-row--strip .lw-row-chart {
+    height: 0.8rem;
+  }
+
+  #learned .lw-control {
+    gap: 0.1rem var(--space-3);
+  }
+
+  #learned .lw-range-label,
+  #learned .lw-verdict {
+    font-size: 0.7rem;
+  }
+
+  #learned .lw-lanes {
+    gap: var(--space-2);
+  }
+
+  #learned .lw-lane {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.25rem 0.6rem;
+    padding: 0.5rem 0.65rem;
+  }
+
+  #learned .lw-lane .lw-arrow {
+    display: none;
+  }
+
+  #learned .lw-lane-out {
+    grid-column: 1 / -1;
+  }
+
+  #learned .lw-lane-out code {
+    font-size: 0.6rem;
+  }
+
+  #learned .lw-lane-body span,
+  #learned .lw-lane-out span {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #learned .lp-edge.is-active .lp-line {
+    animation: none;
+  }
+}

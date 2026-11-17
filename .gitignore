@@ -1,0 +1,50 @@
+# -- match data: licensed for the competition only, never commit or redistribute it --------------
+data/*
+!data/README.md
+*.mp4
+*.gzip
+*.pl3container
+
+# -- full-match ground truth: must never be used or published --------------------------------------
+*_possession_gt.csv
+*_possession_gt_meta.json
+*_possession_gt_reference.csv
+possession_by_frame.pkl
+
+# -- generated output --------------------------------------------------------------------------
+# Submissions are regenerated from code; only the published baselines are tracked.
+evaluation/results/*.csv
+!evaluation/results/baseline_*.csv
+evaluation/results/prototypes/
+evaluation/reports/
+evaluation/scoreboard.csv
+outputs/
+cache/
+# Visualizer replay bundle: real tracking positions and full-match labels. Never commit it.
+site/data/local/
+
+# -- environments and editors ------------------------------------------------------------------
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.idea/
+.vscode/
+.DS_Store
+*.pdf
+# The submitted technical document is the one exception. Commit it only in the commit that the
+# tag `submission` marks, built from the sources of that commit (docs/technical/README.md).
+!docs/technical/The Outliers.pdf
+
+# -- git worktrees made inside a hidden folder of the checkout -----------------------------------------------
+/.*/worktrees/
+
+# -- demo viewer (local only, not part of the submission) ---------------------------------------
+# A web UI that shows how the engine performs. Local only, not part of the submission. It reads
+# the match data in place and must never be committed.
+demo/
+
+# -- technical document build: HTML, CSS and SVGs of tools/docs/build_pdf.py --------------------
+docs/technical/build/

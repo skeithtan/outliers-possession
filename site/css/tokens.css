@@ -1,0 +1,85 @@
+/* Design tokens for the demo site. Dark only. Colour is never the only channel:
+   every lane also has a text title, and states differ in fill (filled or hollow). */
+:root {
+  color-scheme: dark;
+
+  /* surfaces and text */
+  --bg: #0b0e14;
+  --panel: #121722;
+  --hairline: #232a38;
+  --text: #e8ecf3;
+  --muted: #9aa3b2;
+
+  /* label classes */
+  --h: #4f8dff;
+  --a: #ff4d6d;
+  --d: #8b93a7;
+  /* X is drawn hatched on top of --hairline, see base.css */
+  --x: #232a38;
+
+  /* sources */
+  --gt: #ffd166;
+  --baseline: #c084fc;
+  /* the second organiser baseline, smooth125, when it is drawn next to smooth50 */
+  --baseline-2: #67e8f9;
+  /* a failed check */
+  --rejected: #ff6b6b;
+  /* a check that passed */
+  --ok: #7CFFB2;
+
+  /* events */
+  --onset: #ff8a3d;
+  --restart: #7CFFB2;
+  --release: #7CFFB2;
+
+  /* type */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --size-display: clamp(2.5rem, 6vw, 6rem);
+  --size-h1: clamp(1.75rem, 3.2vw, 3rem);
+  --size-h2: clamp(1.25rem, 2vw, 1.75rem);
+  --size-body: 1.0625rem;
+  --size-small: 0.875rem;
+  --size-label: 0.75rem;
+  --line-body: 1.55;
+  --line-tight: 1.1;
+  /* arena mode multiplies type through this factor */
+  --type-scale: 1;
+
+  /* spacing, 4 px base */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+  --space-9: 6rem;
+  --gutter: 1rem;
+
+  /* shape and motion */
+  --radius: 10px;
+  --radius-small: 6px;
+  --ease-out: cubic-bezier(0.215, 0.61, 0.355, 1);
+  --dur-fast: 150ms;
+  --dur: 400ms;
+  --dur-ribbon: 2400ms;
+}
+
+/* Tabular numerals for counters, frames and scores. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Display size for the big counters. */
+.display {
+  font-size: var(--size-display);
+  line-height: var(--line-tight);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-arena="1"] {
+  --type-scale: 1.25;
+}

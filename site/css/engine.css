@@ -1,0 +1,683 @@
+/* "How the engine works" section and the replay panel (sections/engine.js, replay.js, pitch.js).
+   Colour tokens here extend tokens.css. pitch.js reads them with getComputedStyle. */
+:root {
+  /* event kinds on the pitch and in the strips */
+  --ev-release: var(--release, #7CFFB2);
+  --ev-control: #5ad1ff;
+  --ev-touch: #e8ecf3;
+  --ev-contested: #8b93a7;
+  --ev-dribble: #c6f36b;
+  --teleport: #ff3b5c;
+  /* the pitch */
+  --pitch-1: #0c1d18;
+  --pitch-2: #0f241d;
+  --pitch-line: rgba(232, 236, 243, 0.42);
+  --pitch-vignette: rgba(5, 7, 12, 0.6);
+  /* rgb triplet of the dead-ball dimming overlay */
+  --dim: 5, 7, 12;
+}
+
+/* -- section layout ------------------------------------------------------------------------ */
+
+#engine.engine-section {
+  display: grid;
+  grid-template-columns: minmax(18rem, 0.72fr) minmax(0, 1.6fr);
+  grid-template-areas: "head head" "steps figure";
+  column-gap: clamp(1rem, 2.5vw, 3.5rem);
+  padding: 0 clamp(1rem, 3vw, 4rem);
+  background: var(--bg);
+  color: var(--text);
+}
+
+#engine .engine-head {
+  grid-area: head;
+  padding: clamp(3rem, 10vh, 8rem) 0 clamp(1rem, 4vh, 3rem);
+  max-width: 62rem;
+}
+
+#engine .eyebrow {
+  margin: 0 0 var(--space-3);
+  font-size: calc(var(--size-label) * var(--type-scale));
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+#engine .engine-title {
+  margin: 0 0 var(--space-4);
+  font-size: calc(var(--size-h1) * var(--type-scale));
+  line-height: var(--line-tight);
+}
+
+#engine .engine-lede {
+  margin: 0;
+  max-width: 44rem;
+  color: var(--muted);
+  font-size: calc(var(--size-body) * var(--type-scale));
+  line-height: var(--line-body);
+}
+
+#engine > .steps {
+  grid-area: steps;
+  padding-bottom: 40vh;
+}
+
+#engine .step {
+  min-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  opacity: 0.38;
+  transition: opacity var(--dur) var(--ease-out);
+}
+
+#engine .step.is-active {
+  opacity: 1;
+}
+
+#engine .step-kicker {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-mono);
+  font-size: calc(var(--size-label) * var(--type-scale));
+  color: var(--gt);
+  letter-spacing: 0.08em;
+}
+
+#engine .step-title {
+  margin: 0 0 var(--space-4);
+  font-size: calc(var(--size-h2) * var(--type-scale));
+  line-height: var(--line-tight);
+}
+
+#engine .step-body {
+  margin: 0 0 var(--space-3);
+  font-size: calc(var(--size-body) * var(--type-scale));
+  line-height: var(--line-body);
+  max-width: 34rem;
+}
+
+#engine .k-const {
+  display: inline-block;
+  padding: 0 0.4em;
+  margin: 0.05em 0;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-small);
+  background: var(--panel);
+  font-size: 0.86em;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+#engine .k-const code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  color: var(--muted);
+}
+
+#engine .k-const b {
+  font-family: var(--font-mono);
+  color: var(--text);
+}
+
+#engine .step-cases {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+#engine .case-chip {
+  font: 600 calc(var(--size-small) * var(--type-scale)) / 1 var(--font-mono);
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  padding: 0.5em 0.9em;
+  cursor: pointer;
+}
+
+#engine .case-chip.is-on {
+  border-color: var(--gt);
+  color: var(--gt);
+}
+
+#engine > .figure {
+  grid-area: figure;
+  position: sticky;
+  top: var(--figure-top);
+  height: var(--figure-h);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4) 0;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+/* -- pipeline ------------------------------------------------------------------------------ */
+
+#engine .engine-pipe {
+  flex: 0 0 auto;
+}
+
+#engine .pl {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 11vh;
+  overflow: visible;
+  color: var(--release);
+}
+
+#engine .pl-box {
+  fill: var(--panel);
+  stroke: var(--hairline);
+  stroke-width: 1.2;
+  transition: stroke var(--dur) var(--ease-out), fill var(--dur) var(--ease-out);
+}
+
+#engine .pl-halo {
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease-out);
+}
+
+#engine .pl-label {
+  fill: var(--muted);
+  font: 600 15px var(--font-sans);
+}
+
+#engine .pl-file {
+  fill: var(--muted);
+  opacity: 0.6;
+  font: 11px var(--font-mono);
+}
+
+#engine .pl-node {
+  cursor: pointer;
+  outline: none;
+}
+
+#engine .pl-node:focus-visible .pl-box {
+  stroke: var(--text);
+}
+
+#engine .pl-node.is-active .pl-box {
+  stroke: var(--release);
+  stroke-width: 2;
+  fill: #10231c;
+}
+
+#engine .pl-node.is-active .pl-halo {
+  opacity: 1;
+}
+
+#engine .pl-node.is-active .pl-label {
+  fill: var(--text);
+}
+
+#engine .pl-edge {
+  stroke: var(--hairline);
+  stroke-width: 2;
+  fill: none;
+  stroke-dasharray: 4 5;
+  animation: pl-flow 1.2s linear infinite;
+}
+
+#engine .pl-head {
+  stroke: var(--hairline);
+  stroke-width: 2;
+  fill: none;
+}
+
+#engine .pl-edge.is-active,
+#engine .pl-head.is-active {
+  stroke: var(--release);
+}
+
+@keyframes pl-flow {
+  to { stroke-dashoffset: -18; }
+}
+
+/* -- replay panel --------------------------------------------------------------------------- */
+
+#engine .engine-panel,
+.rp {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  position: relative;
+}
+
+.rp-hud {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  gap: 2px;
+  background: var(--panel);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.rp-cell {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 2px 6px;
+  border-right: 1px solid var(--hairline);
+  font-size: clamp(0.72rem, 0.35vw + 0.55rem, 2.1rem);
+}
+
+.rp-cell:last-child {
+  border-right: 0;
+}
+
+.rp-k {
+  font-size: 0.68em;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rp-v {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rp-cell-ours .rp-v,
+.rp-cell-gt .rp-v,
+.rp-cell-base .rp-v,
+.rp-cell-owner .rp-v {
+  min-width: 1.6em;
+}
+
+.rp-v[data-label="H"] { color: var(--h); }
+.rp-v[data-label="A"] { color: var(--a); }
+.rp-v[data-label="D"] { color: var(--d); }
+.rp-cell-gt .rp-k { color: var(--gt); }
+.rp-cell-base .rp-k { color: var(--baseline); }
+
+.rp-bar {
+  display: block;
+  height: 3px;
+  margin-top: 2px;
+  background: var(--hairline);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.rp-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--d);
+  transform-origin: left center;
+  transform: scaleX(0);
+}
+
+/* The stage takes the room that the HUD and the controls leave. replay.js fits the canvas inside
+   it at the pitch aspect and centres it. --cx and --cy are the canvas offsets in the stage. */
+.rp-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 12rem;
+  overflow: hidden;
+}
+
+.rp-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+/* The caption and the note over the top edge of the canvas. When the canvas is too narrow for
+   both, the note wraps under the caption. */
+.rp-top {
+  position: absolute;
+  left: calc(var(--cx, 0px) + 8px);
+  right: calc(var(--cx, 0px) + 8px);
+  top: calc(var(--cy, 0px) + 6px);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 4px 12px;
+  pointer-events: none;
+}
+
+.rp-note {
+  flex: 0 1 auto;
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-size: clamp(0.65rem, 0.3vw + 0.5rem, 1.7rem);
+  color: var(--muted);
+  text-align: right;
+  pointer-events: none;
+}
+
+.rp-note code {
+  font-family: var(--font-mono);
+  color: var(--text);
+}
+
+.rp-note[data-debug]::after {
+  content: attr(data-debug);
+  font-family: var(--font-mono);
+  color: var(--gt);
+}
+
+.rp-msg {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: var(--size-small);
+  pointer-events: none;
+}
+
+.rp-msg:empty {
+  display: none;
+}
+
+.rp-caption {
+  flex: 0 1 auto;
+  max-width: min(60%, 46rem);
+  padding: 0.35em 0.8em;
+  border-radius: var(--radius-small);
+  background: rgba(11, 14, 20, 0.86);
+  color: var(--text);
+  font-size: clamp(0.72rem, 0.35vw + 0.55rem, 2rem);
+  line-height: 1.35;
+  text-align: left;
+  pointer-events: none;
+}
+
+.rp-caption:empty {
+  display: none;
+}
+
+.rp-controls {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: clamp(0.72rem, 0.3vw + 0.55rem, 1.8rem);
+}
+
+.rp-btn,
+.rp-chip,
+.rp-select {
+  font: 600 1em/1 var(--font-sans);
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-small);
+  padding: 0.5em 0.75em;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+
+.rp-btn:hover,
+.rp-chip:hover {
+  border-color: var(--muted);
+}
+
+.rp-btn:focus-visible,
+.rp-chip:focus-visible,
+.rp-select:focus-visible {
+  outline: 2px solid var(--gt);
+  outline-offset: 1px;
+}
+
+.rp-play {
+  min-width: 4.6em;
+}
+
+.rp-btn.is-on,
+.rp-chip.is-on {
+  border-color: var(--release);
+  color: var(--release);
+}
+
+.rp-speeds {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.rp-speed {
+  padding: 0.5em 0.5em;
+  font-family: var(--font-mono);
+}
+
+.rp-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.rp-chip {
+  border-radius: 999px;
+  font-weight: 500;
+}
+
+.rp-keep {
+  border-color: var(--gt);
+  color: var(--gt);
+}
+
+.rp-pop {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 5;
+  width: min(26rem, 92vw);
+  max-height: 60vh;
+  overflow: auto;
+  padding: var(--space-3);
+  background: rgba(18, 23, 34, 0.97);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+}
+
+.rp-pop-title {
+  margin: var(--space-2) 0 var(--space-1);
+  font-size: 0.78em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.rp-pop-note {
+  color: var(--muted);
+  font-size: 0.85em;
+}
+
+.rp-check {
+  display: block;
+  padding: 3px 0;
+  cursor: pointer;
+}
+
+.rp-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: 1em/1.3 var(--font-mono);
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  border-left: 3px solid var(--hairline);
+  padding: 4px 8px;
+  margin: 1px 0;
+  cursor: pointer;
+}
+
+.rp-row:hover {
+  background: rgba(232, 236, 243, 0.05);
+}
+
+.rp-row.is-matched { border-left-color: var(--release); }
+.rp-row.is-missed { border-left-color: var(--a); }
+.rp-row.is-spurious { border-left-color: var(--baseline); }
+
+.rp-strip,
+#engine .engine-strip {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rp-strip-legend {
+  font-size: clamp(0.62rem, 0.25vw + 0.5rem, 1.5rem);
+  color: var(--muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.rp-strip-canvas {
+  width: 100%;
+  height: clamp(30px, 5vh, 90px);
+  display: block;
+  cursor: ew-resize;
+  touch-action: none;
+  border-radius: var(--radius-small);
+  background: var(--panel);
+}
+
+/* -- short screens: give the pitch the height ------------------------------------------------ */
+
+/* At 1280 by 720 the pipeline, the HUD, the controls and the strip take half of the figure.
+   A smaller pipeline row and tighter gaps give the pitch about 30 px more. */
+@media (max-height: 800px) and (min-width: 821px) {
+  #engine > .figure {
+    gap: var(--space-1);
+    padding-top: var(--space-2);
+  }
+
+  #engine .pl {
+    max-height: 8.5vh;
+  }
+
+  #engine .engine-panel,
+  .rp {
+    gap: var(--space-1);
+  }
+
+  .rp-hud {
+    padding: 2px;
+  }
+
+  .rp-cell {
+    padding: 1px 6px;
+  }
+}
+
+/* -- narrow screens: the pitch above the text ---------------------------------------------- */
+
+@media (max-width: 820px) {
+  #engine.engine-section {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "head" "figure" "steps";
+    padding: 0 var(--gutter);
+  }
+
+  #engine > .figure {
+    top: var(--figure-top);
+    z-index: 3;
+    height: auto;
+    max-height: calc(0.72 * var(--figure-h));
+    padding: var(--space-2) 0;
+    background: var(--bg);
+    box-shadow: 0 12px 24px var(--bg);
+  }
+
+  #engine .pl {
+    max-height: 9vh;
+  }
+
+  #engine .pl-file {
+    display: none;
+  }
+
+  .rp-stage {
+    flex: 0 0 auto;
+    min-height: 0;
+    aspect-ratio: 113.3 / 76;
+  }
+
+  .rp-cell {
+    min-width: 0;
+    padding: 1px 5px;
+  }
+
+  .rp-cell-dh,
+  .rp-cell-da,
+  .rp-cell-half,
+  .rp-cell-clock {
+    display: none;
+  }
+
+  .rp-top {
+    top: calc(var(--cy, 0px) + 4px);
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .rp-note {
+    order: -1;
+    margin-left: 0;
+    align-items: flex-start;
+    font-size: 0.6rem;
+  }
+
+  .rp-note .rp-hint {
+    display: none;
+  }
+
+  .rp-caption {
+    max-width: 100%;
+    font-size: 0.66rem;
+  }
+
+  #engine .step {
+    min-height: 70vh;
+    justify-content: flex-start;
+    padding-top: var(--space-6);
+  }
+
+  #engine > .steps {
+    padding-bottom: 20vh;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #engine .pl-edge {
+    animation: none;
+  }
+
+  #engine .step,
+  #engine .pl-box,
+  #engine .pl-halo {
+    transition: none;
+  }
+}
